@@ -5,7 +5,7 @@ public enum TokenType {
     TYPE,
     OPERATOR,
     COMPARATOR,
-    SYNTAX,
+    PUNCTUATION,
     IDENTIFIER,
     INTEGER,
     FLOAT,

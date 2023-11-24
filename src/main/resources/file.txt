@@ -1,9 +1,156 @@
-string teste="rodando estrutura de repetição";
+class Main {
+    int globalVar;
 
-int a = 1;
-int b = 2;
-int c = 0;
+    void main() {
+        int x;
+        float y = 3.14;
+        string greeting = "Hello, World!";
 
-for ( int i = 0; i < 2; i++ ) {
-    c = a + b;
+        if (x == 0) {
+            print("x is zero");
+        } else {
+            print("x is not zero");
+        }
+
+        while (x < 10) {
+            x++;
+            if (!(x % 2 == 0)) {
+                print("Odd Iteration: " + x);
+            }
+        }
+
+        for (int i = 0; i < 5; i++) {
+            if (i == 2) {
+                break;
+            }
+            print("Iteration: " + i);
+        }
+
+        int result = add(5, 7);
+        print("Result: " + result);
+
+        int[] numbers = new int[3];
+        numbers[0] = 1;
+        numbers[1] = 2;
+        numbers[2] = 3;
+
+        foreach (int num : numbers) {
+            print("Number: " + num);
+        }
+
+        string message = getWelcomeMessage("John");
+        print(message);
+
+        int[] fibNumbers = generateFibonacci(8);
+        printFibonacci(fibNumbers);
+
+        print("Square of 4: " + square(4));
+
+        int[] squares = generateSquares(5);
+        printSquares(squares);
+
+        performMathOperations();
+
+        string[] names = new string[3];
+        names[0] = "Alice";
+        names[1] = "Bob";
+        names[2] = "Charlie";
+
+        printNames(names);
+
+        int[] evenNumbers = generateEvenNumbers(10);
+        printEvenNumbers(evenNumbers);
+
+        for (int i = 0; i < 10; i++) {
+            if (i % 2 == 0) {
+                print("Even Iteration: " + i);
+            }
+        }
+
+        int num = 15;
+        if (num > 10) {
+            print("Number is greater than 10");
+        } else {
+            print("Number is less than or equal to 10");
+        }
+
+        return;
+    }
+
+    int add(int a, int b) {
+        return a + b;
+    }
+
+    string getWelcomeMessage(string name) {
+        return "Welcome, " + name + "!";
+    }
+
+    int[] generateFibonacci(int n) {
+        int[] fib = new int[n];
+        fib[0] = 0;
+        fib[1] = 1;
+        for (int i = 2; i < n; i++) {
+            fib[i] = fib[i - 1] + fib[i - 2];
+        }
+        return fib;
+    }
+
+    void printFibonacci(int[] fibNumbers) {
+        foreach (int num : fibNumbers) {
+            print("Fibonacci Number: " + num);
+        }
+    }
+
+    int square(int num) {
+        return num * num;
+    }
+
+    int[] generateSquares(int count) {
+        int[] squares = new int[count];
+        for (int i = 1; i <= count; i++) {
+            squares[i - 1] = square(i);
+        }
+        return squares;
+    }
+
+    void printSquares(int[] squares) {
+        foreach (int num : squares) {
+            print("Square: " + num);
+        }
+    }
+
+    void performMathOperations() {
+        int a = 10;
+        int b = 5;
+
+        int sum = a + b;
+        int difference = a - b;
+        int product = a * b;
+        int quotient = a / b;
+
+        print("Sum: " + sum);
+        print("Difference: " + difference);
+        print("Product: " + product);
+        print("Quotient: " + quotient);
+    }
+
+    void printNames(string[] names) {
+        foreach (string name : names) {
+            print("Name: " + name);
+        }
+    }
+
+    int[] generateEvenNumbers(int count) {
+        int[] evenNumbers = new int[count];
+        for (int i = 1; i <= count; i++) {
+            evenNumbers[i - 1] = 2 * i;
+        }
+        return evenNumbers;
+    }
+
+    void printEvenNumbers(int[] evenNumbers) {
+        foreach (int num : evenNumbers) {
+            print("Even Number: " + num);
+        }
+    }
 }
