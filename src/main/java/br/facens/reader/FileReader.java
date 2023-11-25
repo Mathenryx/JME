@@ -4,9 +4,9 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.util.List;
 
-import static br.facens.constants.RegexConstants.comparator;
-import static br.facens.constants.RegexConstants.operator;
-import static br.facens.constants.RegexConstants.punctuation;
+import static br.facens.constants.RegexConstants.COMPARATOR_REGEX;
+import static br.facens.constants.RegexConstants.OPERATOR_REGEX;
+import static br.facens.constants.RegexConstants.PUNCTUATION_REGEX;
 
 public class FileReader {
 
@@ -73,7 +73,7 @@ public class FileReader {
 
     private static boolean isOperatorComparatorOrPunctuation(char c) {
         // Verifica se o caractere atual é um operador de um único caractere
-        String pattern = operator + "|" + comparator + "|" + punctuation;
+        String pattern = OPERATOR_REGEX + "|" + COMPARATOR_REGEX + "|" + PUNCTUATION_REGEX;
         return String.valueOf(c).matches(pattern);
     }
 
@@ -81,7 +81,7 @@ public class FileReader {
         // Verifica se o caractere atual e o próximo caractere formam um operador de dois caracteres
         if (index < input.length() - 1) {
             String twoCharOperator = input.charAt(index) + String.valueOf(input.charAt(index + 1));
-            return twoCharOperator.matches(operator) || twoCharOperator.matches(comparator);
+            return twoCharOperator.matches(OPERATOR_REGEX) || twoCharOperator.matches(COMPARATOR_REGEX);
         }
         return false;
     }

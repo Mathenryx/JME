@@ -8,28 +8,29 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static br.facens.constants.RegexConstants.comparator;
-import static br.facens.constants.RegexConstants.floatR;
-import static br.facens.constants.RegexConstants.identifier;
-import static br.facens.constants.RegexConstants.integerR;
-import static br.facens.constants.RegexConstants.keyword;
-import static br.facens.constants.RegexConstants.operator;
-import static br.facens.constants.RegexConstants.stringR;
-import static br.facens.constants.RegexConstants.punctuation;
-import static br.facens.constants.RegexConstants.type;
+import static br.facens.constants.RegexConstants.COMPARATOR_REGEX;
+import static br.facens.constants.RegexConstants.FLOAT_REGEX;
+import static br.facens.constants.RegexConstants.IDENTIFIER_REGEX;
+import static br.facens.constants.RegexConstants.INTEGER_REGEX;
+import static br.facens.constants.RegexConstants.KEYWORD_REGEX;
+import static br.facens.constants.RegexConstants.OPERATOR_REGEX;
+import static br.facens.constants.RegexConstants.STRING_REGEX;
+import static br.facens.constants.RegexConstants.PUNCTUATION_REGEX;
+import static br.facens.constants.RegexConstants.TYPE_REGEX;
 
 public class Lexer {
+
     private final static String regex =
             String.join("|",
-                    keyword,
-                    type,
-                    operator,
-                    comparator,
-                    punctuation,
-                    identifier,
-                    integerR,
-                    floatR,
-                    stringR
+                    KEYWORD_REGEX,
+                    TYPE_REGEX,
+                    OPERATOR_REGEX,
+                    COMPARATOR_REGEX,
+                    PUNCTUATION_REGEX,
+                    IDENTIFIER_REGEX,
+                    INTEGER_REGEX,
+                    FLOAT_REGEX,
+                    STRING_REGEX
             );
 
     public static List<Token> analyze(List<String> lexemes) throws LexerException {
@@ -53,23 +54,23 @@ public class Lexer {
         if (matcher.matches()) {
             TokenType type;
 
-            if (lexeme.matches(keyword)) {
+            if (lexeme.matches(KEYWORD_REGEX)) {
                 type = TokenType.KEYWORD;
-            } else if (lexeme.matches(RegexConstants.type)) {
+            } else if (lexeme.matches(RegexConstants.TYPE_REGEX)) {
                 type = TokenType.TYPE;
-            } else if (lexeme.matches(RegexConstants.operator)) {
+            } else if (lexeme.matches(RegexConstants.OPERATOR_REGEX)) {
                 type = TokenType.OPERATOR;
-            } else if (lexeme.matches(comparator)) {
+            } else if (lexeme.matches(COMPARATOR_REGEX)) {
                 type = TokenType.COMPARATOR;
-            } else if (lexeme.matches(punctuation)) {
+            } else if (lexeme.matches(PUNCTUATION_REGEX)) {
                 type = TokenType.PUNCTUATION;
-            } else if (lexeme.matches(identifier)) {
+            } else if (lexeme.matches(IDENTIFIER_REGEX)) {
                 type = TokenType.IDENTIFIER;
-            } else if (lexeme.matches(integerR)) {
+            } else if (lexeme.matches(INTEGER_REGEX)) {
                 type = TokenType.INTEGER;
-            } else if (lexeme.matches(floatR)) {
+            } else if (lexeme.matches(FLOAT_REGEX)) {
                 type = TokenType.FLOAT;
-            } else if (lexeme.matches(stringR)) {
+            } else if (lexeme.matches(STRING_REGEX)) {
                 type = TokenType.STRING;
                 lexeme = lexeme.replace("\"", "");
             } else {
