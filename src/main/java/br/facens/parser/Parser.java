@@ -24,17 +24,19 @@ public class Parser {
     private final List<Token> tokens;
     private int currentTokenIndex;
     private Token currentToken;
-    private final List<String> userTypes;
     private final SymbolTable symbolTable;
     private FunctionSymbol functionSymbol;
+    private final OperationExecutor operationExecutor;
+    private final List<String> printList;
 
     public Parser(List<Token> tokens) {
         this.tokens = tokens;
         this.currentTokenIndex = 0;
         this.currentToken = tokens.get(0);
-        this.userTypes = new ArrayList<>();
         this.symbolTable = new SymbolTable();
         this.functionSymbol = null;
+        this.operationExecutor = new OperationExecutor();
+        this.printList = new ArrayList<>();
     }
 
     public void parse() {
@@ -184,7 +186,7 @@ public class Parser {
         symbolTable.addSymbol(id, new Symbol(id, type));
 
         if (peek(OPERATOR, "=")) {
-            if(peekNext(KEYWORD, "new")){
+            if (peekNext(KEYWORD, "new")) {
                 match(OPERATOR, "=");
                 String arrayType = arrayCreation(id);
                 if (!arrayType.equals(type)) {
@@ -201,7 +203,8 @@ public class Parser {
             match(KEYWORD, "new");
             String type = currentToken.getValue();
             match(getTypes());
-            int arraySize = Integer.parseInt(arrayAccess());
+            String arraySizeString = arrayAccess();
+            int arraySize = Integer.parseInt(arraySizeString == null ? "10" : arraySizeString);
 
             for (int i = 0; i < arraySize; i++) {
                 symbolTable.addSymbol(id + "[" + i + "]", new Symbol(id + "[" + i + "]", type));
@@ -217,14 +220,14 @@ public class Parser {
 
     private String arrayAccess() {
         match(TokenType.PUNCTUATION, "[");
-        String arrayValue = currentToken.getValue();
+        //String arrayValue = currentToken.getValue();
         String indexType = expression();
 
-        if (!indexType.matches("int") ) {
+        if (!indexType.matches("int")) {
             throw new RuntimeException("Array index must be an integer, but got " + indexType);
         }
         match(TokenType.PUNCTUATION, "]");
-        return arrayValue;
+        return operationExecutor.executeOperations();
     }
 
     private void block() {
@@ -235,6 +238,7 @@ public class Parser {
 
     private void statements() {
         while (isStatementStart()) {
+            operationExecutor.clear();
             statement();
         }
     }
@@ -395,6 +399,8 @@ public class Parser {
         match(KEYWORD, "print");
         match(PUNCTUATION, "(");
         expression();
+        String print = operationExecutor.executeOperations();
+        printList.add(print);
         match(PUNCTUATION, ")");
         match(PUNCTUATION, ";");
     }
@@ -405,6 +411,7 @@ public class Parser {
         if (!peek(PUNCTUATION, ";")) {
             this.functionSymbol.setHasReturn(true);
             String actualReturnType = expression();
+
             if (!this.functionSymbol.getType().equals(actualReturnType)) {
                 throw new RuntimeException("Erro semântico: Tipo de retorno incorreto. Esperado: " + this.functionSymbol.getType() + ", mas foi: " + actualReturnType);
             }
@@ -519,7 +526,7 @@ public class Parser {
             throw new RuntimeException("Type error: Cannot assign " + rightType + " to " + leftType + " " + currentTokenIndex);
         }
         symbol.setInitialized(true);
-        //symbol.setValue();
+        symbol.setValue(operationExecutor.executeOperations());
     }
 
 
@@ -550,7 +557,9 @@ public class Parser {
 
         while (peek(COMPARATOR, "&&") || peek(COMPARATOR, "||")) {
             String operator = currentToken.getValue();
+            operationExecutor.pushOperator(operator);
             match(COMPARATOR);
+
             String rightType = equalityExpr();
 
             if (!leftType.equals(rightType) || !leftType.equals("boolean")) {
@@ -566,7 +575,9 @@ public class Parser {
 
         while (peek(COMPARATOR, "==") || peek(COMPARATOR, "!=")) {
             String operator = currentToken.getValue();
+            operationExecutor.pushOperator(operator);
             match(COMPARATOR);
+
             String rightType = comparisonExpr();
 
             if (!leftType.equals(rightType)) {
@@ -581,12 +592,14 @@ public class Parser {
         String leftType = termExpr();
 
         while (peek(COMPARATOR, "<") || peek(COMPARATOR, "<=") || peek(COMPARATOR, ">") || peek(COMPARATOR, ">=")) {
-            String operator = currentToken.getValue();
+            String comparator = currentToken.getValue();
+            operationExecutor.pushOperator(comparator);
             match(COMPARATOR);
+
             String rightType = termExpr();
 
             if (!leftType.equals(rightType) || (!leftType.equals("int") && !leftType.equals("float"))) {
-                throw new RuntimeException("Type error: Cannot perform operation " + operator + " on " + leftType + " and " + rightType);
+                throw new RuntimeException("Type error: Cannot perform operation " + comparator + " on " + leftType + " and " + rightType);
             }
             leftType = "boolean";
         }
@@ -598,7 +611,9 @@ public class Parser {
 
         while (peek(OPERATOR, "+") || peek(OPERATOR, "-")) {
             String operator = currentToken.getValue();
+            operationExecutor.pushOperator(operator);
             match(OPERATOR);
+
             String rightType = factorExpr();
 
             if (!leftType.equals(rightType)) {
@@ -623,7 +638,9 @@ public class Parser {
 
         while (peek(OPERATOR, "*") || peek(OPERATOR, "/") || peek(OPERATOR, "%")) {
             String operator = currentToken.getValue();
+            operationExecutor.pushOperator(operator);
             match(OPERATOR);
+
             String rightType = unaryExpr();
 
             if (!leftType.equals(rightType)) {
@@ -647,6 +664,16 @@ public class Parser {
             }
             return "boolean";
         } else {
+            String value;
+            if (peek(IDENTIFIER) && !peekNext(PUNCTUATION, "(")) {
+                Symbol symbol = symbolTable.getVariableSymbol(currentToken.getValue());
+                value = symbol.getValue();
+            } else {
+                value = currentToken.getValue();
+            }
+            if(value != null) {
+                operationExecutor.pushOperator(value);
+            }
             return primaryExpr();
         }
     }
@@ -772,10 +799,7 @@ public class Parser {
     }
 
     private List<String> getTypes() {
-        List<String> types = new ArrayList<>();
-        types.addAll(List.of("int", "float", "string", "boolean", "void"));
-        types.addAll(userTypes);
-        return types;
+        return new ArrayList<>(List.of("int", "float", "string", "boolean", "void"));
     }
 
     public void collectFunctionDeclarations() {
@@ -783,7 +807,7 @@ public class Parser {
             if (peek(TYPE)) {
                 String returnType = currentToken.getValue();
                 next();
-                if(peek(PUNCTUATION, "[")){
+                if (peek(PUNCTUATION, "[")) {
                     next();
                     next();
                 }

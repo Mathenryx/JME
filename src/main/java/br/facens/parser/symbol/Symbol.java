@@ -34,6 +34,10 @@ public class Symbol {
         this.value = value;
     }
 
+    public String getValue() {
+        return value;
+    }
+
     public boolean isInitialized() {
         return isInitialized;
     }
