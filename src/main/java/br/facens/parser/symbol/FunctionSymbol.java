@@ -7,7 +7,7 @@ public class FunctionSymbol extends Symbol {
     private boolean hasReturn;
 
     public FunctionSymbol(String identifier, String returnType, List<String> parameterTypes) {
-        super(identifier, returnType);
+        super(identifier, returnType, true);
         this.parameterTypes = parameterTypes;
         this.hasReturn = false;
     }

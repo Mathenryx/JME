@@ -14,7 +14,7 @@ public class Main {
     public static void main(String[] args) {
         try {
             System.out.println("========== Reading Files ==========");
-            List<String> lexemes = FileReader.read("src/main/resources/file.txt");
+            List<String> lexemes = FileReader.read("src/main/resources/file2.txt");
             System.out.println("Files Read Successfully\n");
 
             System.out.println("========== Lexical Analysis ==========");
