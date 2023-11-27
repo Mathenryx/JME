@@ -1,19 +1,62 @@
 package br.facens.parser;
 
+import br.facens.parser.symbol.ArraySymbol;
+import br.facens.parser.symbol.FunctionSymbol;
+
 import java.util.Stack;
 
 public class OperationExecutor {
     private final Stack<String> operations = new Stack<>();
+    private final Stack<String> insideArrayOperations = new Stack<>();
+    private boolean isInsideArray;
+    private FunctionSymbol calledFunctionSymbol;
+    private ArraySymbol actualArraySymbol;
 
     public void pushOperator(String operator) {
         operations.push(operator);
+    }
+
+    public void pushInsideArrayOperator(String operator) {
+        insideArrayOperations.push(operator);
     }
 
     public void clear() {
         operations.clear();
     }
 
+    public void setFunctionSymbol(FunctionSymbol calledFunctionSymbol) {
+        this.calledFunctionSymbol = calledFunctionSymbol;
+    }
+
+    public FunctionSymbol getFunctionSymbol() {
+        return this.calledFunctionSymbol;
+    }
+
+    public void setArraySymbol(ArraySymbol actualArraySymbol) {
+        this.actualArraySymbol = actualArraySymbol;
+    }
+
+    public ArraySymbol getArraySymbol() {
+        return this.actualArraySymbol;
+    }
+
+    public boolean isInsideArray() {
+        return this.isInsideArray;
+    }
+
+    public void setIsInsideArray(boolean isInsideArray) {
+        this.isInsideArray = isInsideArray;
+    }
+
     public String executeOperations() {
+        return execute(this.operations);
+    }
+
+    public String executeInsideArrayOperations() {
+        return execute(this.insideArrayOperations);
+    }
+
+    public String execute(Stack<String> operations) {
         while (!operations.isEmpty()) {
             if (operations.size() == 1) {
                 return operations.pop();

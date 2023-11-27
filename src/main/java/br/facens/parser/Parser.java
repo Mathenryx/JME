@@ -2,6 +2,7 @@ package br.facens.parser;
 
 import br.facens.lexer.Token;
 import br.facens.lexer.TokenType;
+import br.facens.parser.symbol.ArraySymbol;
 import br.facens.parser.symbol.FunctionSymbol;
 import br.facens.parser.symbol.Symbol;
 import br.facens.parser.symbol.SymbolTable;
@@ -119,7 +120,6 @@ public class Parser {
 
         match(PUNCTUATION, ")");
 
-
         block();
         symbolTable.popScope();
 
@@ -183,7 +183,7 @@ public class Parser {
         String id = currentToken.getValue();
         match(IDENTIFIER);
 
-        symbolTable.addSymbol(id, new Symbol(id, type));
+        symbolTable.addSymbol(id, new ArraySymbol(id, type));
 
         if (peek(OPERATOR, "=")) {
             if (peekNext(KEYWORD, "new")) {
@@ -193,41 +193,48 @@ public class Parser {
                     throw new RuntimeException("Type error: Cannot assign array of type " + arrayType + " to array of type " + type);
                 }
             } else {
-                assignment(id);
+                assignmentArray(id);
             }
         }
     }
 
     private String arrayCreation(String id) {
-        if (peek(KEYWORD, "new")) {
-            match(KEYWORD, "new");
-            String type = currentToken.getValue();
-            match(getTypes());
-            String arraySizeString = arrayAccess();
-            int arraySize = Integer.parseInt(arraySizeString == null ? "10" : arraySizeString);
+        match(KEYWORD, "new");
+        String type = currentToken.getValue();
+        match(getTypes());
 
-            for (int i = 0; i < arraySize; i++) {
-                symbolTable.addSymbol(id + "[" + i + "]", new Symbol(id + "[" + i + "]", type));
-            }
+        operationExecutor.setIsInsideArray(true);
+        String arraySizeString = arrayAccess(id);
+        operationExecutor.setIsInsideArray(false);
+        int arraySize = Integer.parseInt(arraySizeString == null ? "100" : arraySizeString);
 
-            Symbol symbol = symbolTable.getVariableSymbol(id);
-            symbol.setInitialized(true);
-            return type;
-        } else {
-            return functionCallStmt();
+        ArraySymbol symbol = (ArraySymbol) symbolTable.getVariableSymbol(id);
+        for (int i = 0; i < arraySize; i++) {
+            symbol.addValue("0");
         }
+        symbol.setInitialized(true);
+
+        return type;
     }
 
-    private String arrayAccess() {
+    private String arrayAccess(String id) {
         match(TokenType.PUNCTUATION, "[");
-        //String arrayValue = currentToken.getValue();
         String indexType = expression();
+
+        ArraySymbol symbol = (ArraySymbol) symbolTable.getVariableSymbol(id);
 
         if (!indexType.matches("int")) {
             throw new RuntimeException("Array index must be an integer, but got " + indexType);
         }
+
+        String arrayIndex = operationExecutor.executeInsideArrayOperations();
+        int index = Integer.parseInt(arrayIndex == null ? "100" : arrayIndex);
+        if (symbol.isInitialized() && index >= symbol.getValues().size()) {
+            throw new RuntimeException("Array index out of bounds: " + index);
+        }
+
         match(TokenType.PUNCTUATION, "]");
-        return operationExecutor.executeOperations();
+        return arrayIndex;
     }
 
     private void block() {
@@ -338,7 +345,6 @@ public class Parser {
         match(KEYWORD, "foreach");
         match(PUNCTUATION, "(");
 
-
         String type = currentToken.getValue();
         match(getTypes());
 
@@ -409,7 +415,6 @@ public class Parser {
         match(KEYWORD, "return");
 
         if (!peek(PUNCTUATION, ";")) {
-            this.functionSymbol.setHasReturn(true);
             String actualReturnType = expression();
 
             if (!this.functionSymbol.getType().equals(actualReturnType)) {
@@ -431,6 +436,7 @@ public class Parser {
         }
 
         FunctionSymbol functionSymbol = (FunctionSymbol) symbol;
+        operationExecutor.setFunctionSymbol(functionSymbol);
 
         match(IDENTIFIER);
         match(PUNCTUATION, "(");
@@ -490,18 +496,20 @@ public class Parser {
         match(IDENTIFIER);
 
         if (peek(PUNCTUATION, "[")) {
-            String arrayIndex = arrayAccess();
+            operationExecutor.setIsInsideArray(true);
+            String arrayIndex = arrayAccess(id);
+            operationExecutor.setIsInsideArray(false);
+
             if (!symbolTable.hasSymbol(id)) {
                 throw new RuntimeException("Array " + id + " not initialized ");
             }
-            assignment(id + "[" + arrayIndex + "]");
+            assignmentArrayIndexed(id, arrayIndex);
         } else {
             assignment(id);
         }
 
         match(PUNCTUATION, ";");
     }
-
 
     private void assignment(String id) {
         Symbol symbol = symbolTable.getVariableSymbol(id);
@@ -529,6 +537,68 @@ public class Parser {
         symbol.setValue(operationExecutor.executeOperations());
     }
 
+    private void assignmentArray(String id) {
+        ArraySymbol symbol = (ArraySymbol) symbolTable.getVariableSymbol(id);
+
+        if (symbol == null) {
+            throw new RuntimeException("Variable " + id + " not declared " + currentTokenIndex);
+        }
+
+        String leftType = symbol.getType();
+
+        if (peek(OPERATOR, "+=")) {
+            match(OPERATOR, "+=");
+        } else if (peek(OPERATOR, "-=")) {
+            match(OPERATOR, "-=");
+        } else {
+            match(OPERATOR, "=");
+        }
+
+        String rightType = expression();
+        FunctionSymbol rightFunctionSymbol = operationExecutor.getFunctionSymbol();
+        ArraySymbol rightArraySymbol = operationExecutor.getArraySymbol();
+
+        if (!leftType.equals(rightType)) {
+            throw new RuntimeException("Type error: Cannot assign " + rightType + " to " + leftType + " " + currentTokenIndex);
+        } else if (rightFunctionSymbol != null && !rightFunctionSymbol.isArray()) {
+            throw new RuntimeException("Type error: Return of function is not an array");
+        } else if (rightFunctionSymbol != null) {
+            symbol.addValue(operationExecutor.executeOperations());
+        } else if (rightArraySymbol == null) {
+            throw new RuntimeException("Type error: Cannot assign an variable to an array");
+        } else {
+            symbol.setValues(rightArraySymbol.getValues());
+        }
+        operationExecutor.setFunctionSymbol(null);
+        operationExecutor.setArraySymbol(null);
+        symbol.setInitialized(true);
+    }
+
+    private void assignmentArrayIndexed(String id, String index) {
+        ArraySymbol symbol = (ArraySymbol) symbolTable.getVariableSymbol(id);
+
+        if (symbol == null) {
+            throw new RuntimeException("Variable " + id + " not declared " + currentTokenIndex);
+        }
+
+        String leftType = symbol.getType();
+
+        if (peek(OPERATOR, "+=")) {
+            match(OPERATOR, "+=");
+        } else if (peek(OPERATOR, "-=")) {
+            match(OPERATOR, "-=");
+        } else {
+            match(OPERATOR, "=");
+        }
+
+        String rightType = expression();
+
+        if (!leftType.equals(rightType)) {
+            throw new RuntimeException("Type error: Cannot assign " + rightType + " to " + leftType + " " + currentTokenIndex);
+        }
+
+        symbol.setArrayValue(Integer.parseInt(index), operationExecutor.executeOperations());
+    }
 
     private String expression() {
         if (peek(OPERATOR, "++")) {
@@ -611,7 +681,11 @@ public class Parser {
 
         while (peek(OPERATOR, "+") || peek(OPERATOR, "-")) {
             String operator = currentToken.getValue();
-            operationExecutor.pushOperator(operator);
+            if (operationExecutor.isInsideArray()) {
+                operationExecutor.pushInsideArrayOperator(operator);
+            } else {
+                operationExecutor.pushOperator(operator);
+            }
             match(OPERATOR);
 
             String rightType = factorExpr();
@@ -638,7 +712,11 @@ public class Parser {
 
         while (peek(OPERATOR, "*") || peek(OPERATOR, "/") || peek(OPERATOR, "%")) {
             String operator = currentToken.getValue();
-            operationExecutor.pushOperator(operator);
+            if (operationExecutor.isInsideArray()) {
+                operationExecutor.pushInsideArrayOperator(operator);
+            } else {
+                operationExecutor.pushOperator(operator);
+            }
             match(OPERATOR);
 
             String rightType = unaryExpr();
@@ -665,15 +743,25 @@ public class Parser {
             return "boolean";
         } else {
             String value;
-            if (peek(IDENTIFIER) && !peekNext(PUNCTUATION, "(")) {
-                Symbol symbol = symbolTable.getVariableSymbol(currentToken.getValue());
-                value = symbol.getValue();
+            if (peek(IDENTIFIER)) {
+                if (peekNext(PUNCTUATION, "(")) {
+                    Symbol symbol = symbolTable.getFunctionSymbol(currentToken.getValue());
+                    value = getDefaultValue(symbol);
+                } else {
+                    Symbol symbol = symbolTable.getVariableSymbol(currentToken.getValue());
+                    value = symbol.getValue();
+                }
             } else {
                 value = currentToken.getValue();
             }
-            if(value != null) {
-                operationExecutor.pushOperator(value);
+            if (value != null) {
+                if (operationExecutor.isInsideArray()) {
+                    operationExecutor.pushInsideArrayOperator(value);
+                } else {
+                    operationExecutor.pushOperator(value);
+                }
             }
+
             return primaryExpr();
         }
     }
@@ -702,6 +790,10 @@ public class Parser {
             String identifier = currentToken.getValue();
             Symbol symbol = symbolTable.getVariableSymbol(identifier);
 
+            if (symbolTable.getVariableSymbol(identifier) instanceof ArraySymbol) {
+                operationExecutor.setArraySymbol((ArraySymbol) symbolTable.getVariableSymbol(identifier));
+            }
+
             if (!symbolTable.hasSymbol(identifier)) {
                 throw new RuntimeException("Variable " + identifier + " not declared " + currentTokenIndex);
             } else if (!symbol.isInitialized()) {
@@ -709,7 +801,9 @@ public class Parser {
             } else {
                 match(IDENTIFIER);
                 if (peek(PUNCTUATION, "[")) {
-                    arrayAccess();
+                    operationExecutor.setIsInsideArray(true);
+                    arrayAccess(identifier);
+                    operationExecutor.setIsInsideArray(false);
                 }
             }
             return symbol.getType();
@@ -729,11 +823,6 @@ public class Parser {
 
     private boolean peek(TokenType type, String value) {
         return currentToken.getType() == type && value.equals(currentToken.getValue());
-    }
-
-    private boolean peekNext(TokenType type) {
-        return currentTokenIndex + 1 < tokens.size() &&
-                tokens.get(currentTokenIndex + 1).getType() == type;
     }
 
     private boolean peekNext(TokenType type, String value) {
@@ -802,14 +891,35 @@ public class Parser {
         return new ArrayList<>(List.of("int", "float", "string", "boolean", "void"));
     }
 
-    public void collectFunctionDeclarations() {
+    private String getDefaultValue(Symbol symbol) {
+        switch (symbol.getType()) {
+            case "string":
+                return "";
+            case "int":
+                return "0";
+            case "float":
+                return "0.0";
+            case "boolean":
+                return "false";
+            default:
+                return null;
+        }
+    }
+
+    private void collectFunctionDeclarations() {
         while (currentTokenIndex < tokens.size()) {
+            boolean isArray = false;
+            boolean hasReturn = false;
             if (peek(TYPE)) {
+                if (!"void".equals(currentToken.getValue())) {
+                    hasReturn = true;
+                }
                 String returnType = currentToken.getValue();
                 next();
                 if (peek(PUNCTUATION, "[")) {
                     next();
                     next();
+                    isArray = true;
                 }
                 if (peek(IDENTIFIER)) {
                     String functionName = currentToken.getValue();
@@ -830,6 +940,8 @@ public class Parser {
                         }
                         FunctionSymbol functionSymbol = new FunctionSymbol(functionName, returnType, parameterTypes);
                         functionSymbol.setInitialized(true);
+                        functionSymbol.setHasReturn(hasReturn);
+                        functionSymbol.setIsArray(isArray);
                         symbolTable.addSymbol(functionName, functionSymbol);
                     }
                 }

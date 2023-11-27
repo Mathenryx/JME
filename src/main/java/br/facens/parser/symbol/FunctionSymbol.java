@@ -5,6 +5,7 @@ import java.util.List;
 public class FunctionSymbol extends Symbol {
     private final List<String> parameterTypes;
     private boolean hasReturn;
+    private boolean isArray;
 
     public FunctionSymbol(String identifier, String returnType, List<String> parameterTypes) {
         super(identifier, returnType, true);
@@ -22,5 +23,13 @@ public class FunctionSymbol extends Symbol {
 
     public boolean hasReturn() {
         return hasReturn;
+    }
+
+    public void setIsArray(boolean isArray) {
+        this.isArray = isArray;
+    }
+
+    public boolean isArray() {
+        return isArray;
     }
 }
