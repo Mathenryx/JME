@@ -1,5 +1,7 @@
 package br.facens.parser;
 
+import br.facens.exceptions.SemanticException;
+import br.facens.exceptions.SyntaxException;
 import br.facens.lexer.Token;
 import br.facens.lexer.TokenType;
 import br.facens.parser.symbol.ArraySymbol;
@@ -41,15 +43,10 @@ public class Parser {
     }
 
     public void parse() {
-        try {
-            symbolTable.pushScope();
-            collectFunctionDeclarations();
-            program();
-            System.out.println("Análise sintática bem-sucedida!");
-        } catch (RuntimeException e) {
-            e.printStackTrace();
-            System.out.println("Erro de análise sintática: " + e);
-        }
+        symbolTable.pushScope();
+        collectFunctionDeclarations();
+        program();
+        System.out.println("\nParser Completed Successfully!");
     }
 
     private void program() {
@@ -58,9 +55,9 @@ public class Parser {
 
     // Classe main
     private void mainClass() {
-        match(TokenType.KEYWORD, "class");
-        match(TokenType.KEYWORD, "Main");
-        match(PUNCTUATION, "{");
+        consume(TokenType.KEYWORD, "class");
+        consume(TokenType.KEYWORD, "Main");
+        consume(PUNCTUATION, "{");
 
         declarations();
 
@@ -68,14 +65,14 @@ public class Parser {
 
         declarations();
 
-        match(PUNCTUATION, "}");
+        consume(PUNCTUATION, "}");
     }
 
     private void mainMethod() {
-        match(TYPE, "void");
-        match(KEYWORD, "main");
-        match(PUNCTUATION, "(");
-        match(PUNCTUATION, ")");
+        consume(TYPE, "void");
+        consume(KEYWORD, "main");
+        consume(PUNCTUATION, "(");
+        consume(PUNCTUATION, ")");
 
         symbolTable.pushScope();
         block();
@@ -90,7 +87,7 @@ public class Parser {
 
     private void declaration() {// TODO: FIX
         String type = currentToken.getValue();
-        match(getTypes());
+        consume(getTypes());
         if (peek(IDENTIFIER)) {
             if (peekNext(PUNCTUATION, "(")) {
                 functionDeclaration(type);
@@ -106,25 +103,25 @@ public class Parser {
 
     private void functionDeclaration(String returnType) {
         if (peek(PUNCTUATION, "[")) {
-            match(PUNCTUATION, "[");
-            match(PUNCTUATION, "]");
+            consume(PUNCTUATION, "[");
+            consume(PUNCTUATION, "]");
         }
 
         this.functionSymbol = (FunctionSymbol) symbolTable.getFunctionSymbol(currentToken.getValue());
-        match(IDENTIFIER);
+        consume(IDENTIFIER);
 
         symbolTable.pushScope();
-        match(PUNCTUATION, "(");
+        consume(PUNCTUATION, "(");
 
         parameters();
 
-        match(PUNCTUATION, ")");
+        consume(PUNCTUATION, ")");
 
         block();
         symbolTable.popScope();
 
         if (!"void".equals(returnType) && !this.functionSymbol.hasReturn()) {
-            throw new RuntimeException("Erro semântico: função deveria retornar um: " + returnType);
+            throw new SemanticException("function must return type: " + returnType);
         }
 
         this.functionSymbol = null;
@@ -135,7 +132,7 @@ public class Parser {
             parameter();
 
             while (peek(TokenType.PUNCTUATION, ",")) {
-                match(TokenType.PUNCTUATION, ",");
+                consume(TokenType.PUNCTUATION, ",");
                 parameter();
             }
         }
@@ -143,15 +140,15 @@ public class Parser {
 
     private void parameter() {
         String type = currentToken.getValue();
-        match(getTypes());
+        consume(getTypes());
 
         if (peek(PUNCTUATION, "[")) {
-            match(TokenType.PUNCTUATION, "[");
-            match(TokenType.PUNCTUATION, "]");
+            consume(TokenType.PUNCTUATION, "[");
+            consume(TokenType.PUNCTUATION, "]");
         }
 
         String id = currentToken.getValue();
-        match(IDENTIFIER);
+        consume(IDENTIFIER);
 
         Symbol symbol = new Symbol(id, type);
         symbol.setInitialized(true);
@@ -164,33 +161,34 @@ public class Parser {
         } else {
             String id = currentToken.getValue();
             if (symbolTable.hasSymbolCurrentScope(id)) {
-                throw new RuntimeException("Variable " + id + " has already been declared");
+                throw new SemanticException("Duplicate Variable: Variable " + id + " has already been declared");
             }
             Symbol symbol = new Symbol(id, type);
             symbolTable.addSymbol(id, symbol);
 
-            match(IDENTIFIER);
+            consume(IDENTIFIER);
             if (peek(OPERATOR, "=")) {
                 assignment(id);
             }
         }
-        match(PUNCTUATION, ";");
+        consume(PUNCTUATION, ";");
+
     }
 
     private void arrayDeclaration(String type) {
-        match(PUNCTUATION, "[");
-        match(PUNCTUATION, "]");
+        consume(PUNCTUATION, "[");
+        consume(PUNCTUATION, "]");
         String id = currentToken.getValue();
-        match(IDENTIFIER);
+        consume(IDENTIFIER);
 
         symbolTable.addSymbol(id, new ArraySymbol(id, type));
 
         if (peek(OPERATOR, "=")) {
             if (peekNext(KEYWORD, "new")) {
-                match(OPERATOR, "=");
+                consume(OPERATOR, "=");
                 String arrayType = arrayCreation(id);
                 if (!arrayType.equals(type)) {
-                    throw new RuntimeException("Type error: Cannot assign array of type " + arrayType + " to array of type " + type);
+                    throw new SemanticException("Type error: Cannot assign array of type " + arrayType + " to array of type " + type);
                 }
             } else {
                 assignmentArray(id);
@@ -199,9 +197,9 @@ public class Parser {
     }
 
     private String arrayCreation(String id) {
-        match(KEYWORD, "new");
+        consume(KEYWORD, "new");
         String type = currentToken.getValue();
-        match(getTypes());
+        consume(getTypes());
 
         operationExecutor.setIsInsideArray(true);
         String arraySizeString = arrayAccess(id);
@@ -218,29 +216,31 @@ public class Parser {
     }
 
     private String arrayAccess(String id) {
-        match(TokenType.PUNCTUATION, "[");
+        consume(TokenType.PUNCTUATION, "[");
         String indexType = expression();
 
         ArraySymbol symbol = (ArraySymbol) symbolTable.getVariableSymbol(id);
 
         if (!indexType.matches("int")) {
-            throw new RuntimeException("Array index must be an integer, but got " + indexType);
+            throw new SemanticException("Type error: Array index must be an integer, but got " + indexType);
         }
 
         String arrayIndex = operationExecutor.executeInsideArrayOperations();
         int index = Integer.parseInt(arrayIndex == null ? "100" : arrayIndex);
         if (symbol.isInitialized() && index >= symbol.getValues().size()) {
-            throw new RuntimeException("Array index out of bounds: " + index);
+            throw new SemanticException("Array (" + id + ") index out of bounds: " + index);
         }
 
-        match(TokenType.PUNCTUATION, "]");
+        consume(TokenType.PUNCTUATION, "]");
         return arrayIndex;
     }
 
     private void block() {
-        match(TokenType.PUNCTUATION, "{");
+        consume(TokenType.PUNCTUATION, "{");
+
         statements();
-        match(TokenType.PUNCTUATION, "}");
+        consume(TokenType.PUNCTUATION, "}");
+
     }
 
     private void statements() {
@@ -267,41 +267,45 @@ public class Parser {
 
     private void statement() {
         if (peek(TokenType.KEYWORD, "if")) {
-            ifStmt();
+            ifStatement();
         } else if (peek(TokenType.KEYWORD, "while")) {
-            whileStmt();
+            whileStatement();
         } else if (peek(TokenType.KEYWORD, "for")) {
-            forStmt();
+            forStatement();
         } else if (peek(TokenType.KEYWORD, "foreach")) {
-            forEachStmt();
+            forEachStatement();
         } else if (peek(TokenType.KEYWORD, "print")) {
-            printStmt();
+            printStatement();
         } else if (peek(TokenType.KEYWORD, "return")) {
-            returnStmt();
+            returnStatement();
         } else if (peek(TokenType.IDENTIFIER)) {
             if (peekNext(TokenType.PUNCTUATION, "(")) {
-                functionCallStmt();
-                match(TokenType.PUNCTUATION, ";");
+                functionCallStatement();
+                consume(TokenType.PUNCTUATION, ";");
+
             } else if (peekNext(OPERATOR, "++")) {
-                incrementStmt();
-                match(PUNCTUATION, ";");
+                incrementStatement();
+                consume(PUNCTUATION, ";");
+
             } else if (peekNext(OPERATOR, "--")) {
-                decrementStmt();
-                match(PUNCTUATION, ";");
+                decrementStatement();
+                consume(PUNCTUATION, ";");
+
             } else {
-                assignmentStmt();
+                assignmentStatement();
             }
         } else if (peek(OPERATOR, "++")) {
-            incrementStmt();
+            incrementStatement();
         } else if (peek(OPERATOR, "--")) {
-            decrementStmt();
+            decrementStatement();
         } else if (peek(TYPE)) {
             String type = currentToken.getValue();
-            match(getTypes());
+            consume(getTypes());
             varDeclaration(type);
         } else if (peek(KEYWORD, "break")) {
-            match(KEYWORD, "break");
-            match(PUNCTUATION, ";");
+            consume(KEYWORD, "break");
+            consume(PUNCTUATION, ";");
+
         } else {
             symbolTable.pushScope();
             block();
@@ -309,19 +313,19 @@ public class Parser {
         }
     }
 
-    private void ifStmt() {
-        match(TokenType.KEYWORD, "if");
-        match(TokenType.PUNCTUATION, "(");
+    private void ifStatement() {
+        consume(TokenType.KEYWORD, "if");
+        consume(TokenType.PUNCTUATION, "(");
         expression();
-        match(TokenType.PUNCTUATION, ")");
+        consume(TokenType.PUNCTUATION, ")");
         symbolTable.pushScope();
         block();
         symbolTable.popScope();
 
         if (peek(TokenType.KEYWORD, "else")) {
-            match(TokenType.KEYWORD, "else");
+            consume(TokenType.KEYWORD, "else");
             if (peek(TokenType.KEYWORD, "if")) {
-                ifStmt();
+                ifStatement();
             } else {
                 symbolTable.pushScope();
                 block();
@@ -330,48 +334,48 @@ public class Parser {
         }
     }
 
-    private void whileStmt() {
-        match(KEYWORD, "while");
-        match(PUNCTUATION, "(");
+    private void whileStatement() {
+        consume(KEYWORD, "while");
+        consume(PUNCTUATION, "(");
         expression();
-        match(PUNCTUATION, ")");
+        consume(PUNCTUATION, ")");
         symbolTable.pushScope();
         block();
         symbolTable.popScope();
     }
 
-    private void forEachStmt() {
+    private void forEachStatement() {
         symbolTable.pushScope();
-        match(KEYWORD, "foreach");
-        match(PUNCTUATION, "(");
+        consume(KEYWORD, "foreach");
+        consume(PUNCTUATION, "(");
 
         String type = currentToken.getValue();
-        match(getTypes());
+        consume(getTypes());
 
         String id = currentToken.getValue();
-        match(IDENTIFIER);
+        consume(IDENTIFIER);
 
         Symbol symbol = new Symbol(id, type);
         symbol.setInitialized(true);
         symbolTable.addSymbol(id, symbol);
 
-        match(PUNCTUATION, ":");
-        match(IDENTIFIER);
-        match(PUNCTUATION, ")");
+        consume(PUNCTUATION, ":");
+        consume(IDENTIFIER);
+        consume(PUNCTUATION, ")");
         block();
         symbolTable.popScope();
     }
 
-    private void forStmt() {
+    private void forStatement() {
         symbolTable.pushScope();
-        match(KEYWORD, "for");
-        match(PUNCTUATION, "(");
+        consume(KEYWORD, "for");
+        consume(PUNCTUATION, "(");
         forInit();
-        match(PUNCTUATION, ";");
+        consume(PUNCTUATION, ";");
         expression();
-        match(PUNCTUATION, ";");
+        consume(PUNCTUATION, ";");
         expression();
-        match(PUNCTUATION, ")");
+        consume(PUNCTUATION, ")");
         block();
         symbolTable.popScope();
     }
@@ -383,78 +387,80 @@ public class Parser {
 
         if (peek(TokenType.TYPE, "int")) {
             type = currentToken.getValue();
-            match(TYPE, "int");
+            consume(TYPE, "int");
             id = currentToken.getValue();
             symbol = new Symbol(id, type);
         } else if (peek(TokenType.TYPE)) {
-            //TODO: adicionar exceção de int no for
+            throw new SemanticException("Type error: Expected int in for init, but got: " + currentToken.getValue());
         }
 
         if (type != null) {
             symbolTable.addSymbol(id, symbol);
         }
 
-        match(TokenType.IDENTIFIER);
+        consume(TokenType.IDENTIFIER);
 
         if (peek(OPERATOR, "=")) {
             assignment(id);
         }
     }
 
-    private void printStmt() {
-        match(KEYWORD, "print");
-        match(PUNCTUATION, "(");
+    private void printStatement() {
+        consume(KEYWORD, "print");
+        consume(PUNCTUATION, "(");
         expression();
         String print = operationExecutor.executeOperations();
         printList.add(print);
-        match(PUNCTUATION, ")");
-        match(PUNCTUATION, ";");
+        consume(PUNCTUATION, ")");
+        consume(PUNCTUATION, ";");
+
     }
 
-    private void returnStmt() {
-        match(KEYWORD, "return");
+    private void returnStatement() {
+        consume(KEYWORD, "return");
 
         if (!peek(PUNCTUATION, ";")) {
             String actualReturnType = expression();
 
             if (!this.functionSymbol.getType().equals(actualReturnType)) {
-                throw new RuntimeException("Erro semântico: Tipo de retorno incorreto. Esperado: " + this.functionSymbol.getType() + ", mas foi: " + actualReturnType);
+                throw new SemanticException("Type error: Incorrect return type. Expected: " + this.functionSymbol.getType() + ", but got: " + actualReturnType);
             }
         }
 
-        match(PUNCTUATION, ";");
+        consume(PUNCTUATION, ";");
+
     }
 
-    private String functionCallStmt() {
+    private String functionCallStatement() {
         String functionName = currentToken.getValue();
         Symbol symbol = symbolTable.getFunctionSymbol(functionName);
 
         if (symbol == null) {
-            throw new RuntimeException("Função " + functionName + " não declarada.");
+            throw new SemanticException("Undeclared function: Function " + functionName + " not declared.");
         } else if (!(symbol instanceof FunctionSymbol)) {
-            throw new RuntimeException("Erro: " + functionName + " não é uma função.");
+            throw new SemanticException("Undeclared function: " + functionName + " is not a function");
         }
 
         FunctionSymbol functionSymbol = (FunctionSymbol) symbol;
         operationExecutor.setFunctionSymbol(functionSymbol);
 
-        match(IDENTIFIER);
-        match(PUNCTUATION, "(");
+        consume(IDENTIFIER);
+        consume(PUNCTUATION, "(");
 
         List<String> argumentTypes = new ArrayList<>();
         if (!peek(PUNCTUATION, ")")) {
             argumentTypes = arguments();
         }
 
-        match(PUNCTUATION, ")");
+        consume(PUNCTUATION, ")");
 
         if (argumentTypes.size() != functionSymbol.getParameterTypes().size()) {
-            throw new RuntimeException("Número incorreto de argumentos para a função " + functionName + ".");
+            throw new SemanticException("Function call error: Incorrect number of arguments for function " + functionName + ".");
         }
 
         for (int i = 0; i < argumentTypes.size(); i++) {
             if (!argumentTypes.get(i).equals(functionSymbol.getParameterTypes().get(i))) {
-                throw new RuntimeException("Tipo incorreto de argumento para a função " + functionName + ".");
+                throw new SemanticException("Type error: Incorrect type of argument for function " + functionName + ".");
             }
         }
         return functionSymbol.getType();
@@ -464,36 +470,58 @@ public class Parser {
         List<String> argumentTypes = new ArrayList<>();
         argumentTypes.add(expression());
 
-        while (peek(TokenType.PUNCTUATION, ",")) {
-            match(TokenType.PUNCTUATION, ",");
+        while (peek(PUNCTUATION, ",")) {
+            consume(PUNCTUATION, ",");
             argumentTypes.add(expression());
         }
         return argumentTypes;
     }
 
-    private void incrementStmt() {
-        if (peek(TokenType.IDENTIFIER)) {
-            match(TokenType.IDENTIFIER);
-            match(OPERATOR, "++");
+    private void incrementStatement() {
+        String id;
+        if (peek(IDENTIFIER)) {
+            id = currentToken.getValue();
+            consume(IDENTIFIER);
+            consume(OPERATOR, "++");
         } else {
-            match(OPERATOR, "++");
-            match(TokenType.IDENTIFIER);
+            consume(OPERATOR, "++");
+            id = currentToken.getValue();
+            consume(IDENTIFIER);
         }
+
+        Symbol symbol = symbolTable.getVariableSymbol(id);
+        if (!"int".equals(symbol.getType())) {
+            throw new SemanticException("Type error: Cannot increment non-integer variable " + id);
+        }
+        int newValue = Integer.parseInt(symbol.getValue());
+        newValue++;
+        symbol.setValue(String.valueOf(newValue));
     }
 
-    private void decrementStmt() {
-        if (peek(TokenType.IDENTIFIER)) {
-            match(TokenType.IDENTIFIER);
-            match(OPERATOR, "--");
+    private void decrementStatement() {
+        String id;
+        if (peek(IDENTIFIER)) {
+            id = currentToken.getValue();
+            consume(IDENTIFIER);
+            consume(OPERATOR, "--");
         } else {
-            match(OPERATOR, "--");
-            match(TokenType.IDENTIFIER);
+            id = currentToken.getValue();
+            consume(OPERATOR, "--");
+            consume(IDENTIFIER);
         }
+
+        Symbol symbol = symbolTable.getVariableSymbol(id);
+        if (!"int".equals(symbol.getType())) {
+            throw new SemanticException("Type error: Cannot decrement non-integer variable " + id);
+        }
+        int newValue = Integer.parseInt(symbol.getValue());
+        newValue--;
+        symbol.setValue(String.valueOf(newValue));
     }
 
-    private void assignmentStmt() {
+    private void assignmentStatement() {
         String id = currentToken.getValue();
-        match(IDENTIFIER);
+        consume(IDENTIFIER);
 
         if (peek(PUNCTUATION, "[")) {
             operationExecutor.setIsInsideArray(true);
@@ -501,71 +529,83 @@ public class Parser {
             operationExecutor.setIsInsideArray(false);
 
             if (!symbolTable.hasSymbol(id)) {
-                throw new RuntimeException("Array " + id + " not initialized ");
+                throw new SemanticException("Unassigned variable: Array " + id + " not initialized ");
             }
             assignmentArrayIndexed(id, arrayIndex);
         } else {
             assignment(id);
         }
 
-        match(PUNCTUATION, ";");
+        consume(PUNCTUATION, ";");
+
     }
 
     private void assignment(String id) {
         Symbol symbol = symbolTable.getVariableSymbol(id);
 
         if (symbol == null) {
-            throw new RuntimeException("Variable " + id + " not declared " + currentTokenIndex);
+            throw new SemanticException("Undeclared Variable: Variable " + id + " not declared ");
         }
 
         String leftType = symbol.getType();
-
-        if (peek(OPERATOR, "+=")) {
-            match(OPERATOR, "+=");
-        } else if (peek(OPERATOR, "-=")) {
-            match(OPERATOR, "-=");
+        String operator = null;
+        if (peek(OPERATOR, "+=") || peek(OPERATOR, "-=")) {
+            operator = currentToken.getValue();
+            if (!"int".equals(leftType) && !"float".equals(leftType)) {
+                throw new SemanticException("Type error: Cannot use += or -= with non-numeric variable " + id);
+            }
+            consume(OPERATOR);
         } else {
-            match(OPERATOR, "=");
+            consume(OPERATOR, "=");
         }
 
         String rightType = expression();
 
         if (!leftType.equals(rightType)) {
-            throw new RuntimeException("Type error: Cannot assign " + rightType + " to " + leftType + " " + currentTokenIndex);
+            throw new SemanticException("Type error: Cannot assign " + rightType + " to " + leftType + " ");
         }
+
+        String value = operationExecutor.executeOperations();
+        if ("+=".equals(operator)) {
+            operationExecutor.pushOperator(value);
+            operationExecutor.pushOperator("+");
+            operationExecutor.pushOperator(symbol.getValue());
+            value = operationExecutor.executeOperations();
+        } else if ("-=".equals(operator)) {
+            operationExecutor.pushOperator(value);
+            operationExecutor.pushOperator("-");
+            operationExecutor.pushOperator(symbol.getValue());
+            value = operationExecutor.executeOperations();
+        }
+
+        symbol.setValue(value);
         symbol.setInitialized(true);
-        symbol.setValue(operationExecutor.executeOperations());
     }
+
 
     private void assignmentArray(String id) {
         ArraySymbol symbol = (ArraySymbol) symbolTable.getVariableSymbol(id);
 
         if (symbol == null) {
-            throw new RuntimeException("Variable " + id + " not declared " + currentTokenIndex);
+            throw new SemanticException("Undeclared variable: Variable " + id + " not declared ");
         }
 
         String leftType = symbol.getType();
 
-        if (peek(OPERATOR, "+=")) {
-            match(OPERATOR, "+=");
-        } else if (peek(OPERATOR, "-=")) {
-            match(OPERATOR, "-=");
-        } else {
-            match(OPERATOR, "=");
-        }
+        consume(OPERATOR, "=");
 
         String rightType = expression();
         FunctionSymbol rightFunctionSymbol = operationExecutor.getFunctionSymbol();
         ArraySymbol rightArraySymbol = operationExecutor.getArraySymbol();
 
         if (!leftType.equals(rightType)) {
-            throw new RuntimeException("Type error: Cannot assign " + rightType + " to " + leftType + " " + currentTokenIndex);
+            throw new SemanticException("Type error: Cannot assign " + rightType + " to " + leftType + " ");
         } else if (rightFunctionSymbol != null && !rightFunctionSymbol.isArray()) {
-            throw new RuntimeException("Type error: Return of function is not an array");
+            throw new SemanticException("Type error: Return of function is not an array");
         } else if (rightFunctionSymbol != null) {
             symbol.addValue(operationExecutor.executeOperations());
         } else if (rightArraySymbol == null) {
-            throw new RuntimeException("Type error: Cannot assign an variable to an array");
+            throw new SemanticException("Type error: Cannot assign an variable to an array");
         } else {
             symbol.setValues(rightArraySymbol.getValues());
         }
@@ -578,23 +618,24 @@ public class Parser {
         ArraySymbol symbol = (ArraySymbol) symbolTable.getVariableSymbol(id);
 
         if (symbol == null) {
-            throw new RuntimeException("Variable " + id + " not declared " + currentTokenIndex);
+            throw new SemanticException("Undeclared variable: Variable " + id + " not declared ");
         }
 
         String leftType = symbol.getType();
 
-        if (peek(OPERATOR, "+=")) {
-            match(OPERATOR, "+=");
-        } else if (peek(OPERATOR, "-=")) {
-            match(OPERATOR, "-=");
+        if (peek(OPERATOR, "+=") || peek(OPERATOR, "-=")) {
+            if (!"int".equals(leftType) && !"float".equals(leftType)) {
+                throw new SemanticException("Type error: Cannot use " + currentToken.getValue() + " with non-numeric variable " + id);
+            }
+            consume(OPERATOR);
         } else {
-            match(OPERATOR, "=");
+            consume(OPERATOR, "=");
         }
 
         String rightType = expression();
 
         if (!leftType.equals(rightType)) {
-            throw new RuntimeException("Type error: Cannot assign " + rightType + " to " + leftType + " " + currentTokenIndex);
+            throw new SemanticException("Type error: Cannot assign " + rightType + " to " + leftType + " ");
         }
 
         symbol.setArrayValue(Integer.parseInt(index), operationExecutor.executeOperations());
@@ -602,82 +643,82 @@ public class Parser {
 
     private String expression() {
         if (peek(OPERATOR, "++")) {
-            incrementStmt();
+            incrementStatement();
             return "void";
         } else if (peek(OPERATOR, "--")) {
-            decrementStmt();
+            decrementStatement();
             return "void";
         } else if (peek(IDENTIFIER)) {
             if (peekNext(OPERATOR, "++")) {
-                incrementStmt();
+                incrementStatement();
                 return "void";
             } else if (peekNext(OPERATOR, "--")) {
-                decrementStmt();
+                decrementStatement();
                 return "void";
             } else {
-                return logicalExpr();
+                return logicalExpression();
             }
         } else {
-            return logicalExpr();
+            return logicalExpression();
         }
     }
 
-    private String logicalExpr() {
-        String leftType = equalityExpr();
+    private String logicalExpression() {
+        String leftType = equalityExpression();
 
         while (peek(COMPARATOR, "&&") || peek(COMPARATOR, "||")) {
             String operator = currentToken.getValue();
             operationExecutor.pushOperator(operator);
-            match(COMPARATOR);
+            consume(COMPARATOR);
 
-            String rightType = equalityExpr();
+            String rightType = equalityExpression();
 
             if (!leftType.equals(rightType) || !leftType.equals("boolean")) {
-                throw new RuntimeException("Type error: Cannot perform operation " + operator + " on " + leftType + " and " + rightType);
+                throw new SemanticException("Type error: Cannot perform operation " + operator + " on " + leftType + " and " + rightType);
             }
             leftType = "boolean";
         }
         return leftType;
     }
 
-    private String equalityExpr() {
-        String leftType = comparisonExpr();
+    private String equalityExpression() {
+        String leftType = comparisonExpression();
 
         while (peek(COMPARATOR, "==") || peek(COMPARATOR, "!=")) {
             String operator = currentToken.getValue();
             operationExecutor.pushOperator(operator);
-            match(COMPARATOR);
+            consume(COMPARATOR);
 
-            String rightType = comparisonExpr();
+            String rightType = comparisonExpression();
 
             if (!leftType.equals(rightType)) {
-                throw new RuntimeException("Type error: Cannot perform operation " + operator + " on " + leftType + " and " + rightType);
+                throw new SemanticException("Type error: Cannot perform operation " + operator + " on " + leftType + " and " + rightType);
             }
             leftType = "boolean";
         }
         return leftType;
     }
 
-    private String comparisonExpr() {
-        String leftType = termExpr();
+    private String comparisonExpression() {
+        String leftType = termExpression();
 
         while (peek(COMPARATOR, "<") || peek(COMPARATOR, "<=") || peek(COMPARATOR, ">") || peek(COMPARATOR, ">=")) {
             String comparator = currentToken.getValue();
             operationExecutor.pushOperator(comparator);
-            match(COMPARATOR);
+            consume(COMPARATOR);
 
-            String rightType = termExpr();
+            String rightType = termExpression();
 
             if (!leftType.equals(rightType) || (!leftType.equals("int") && !leftType.equals("float"))) {
-                throw new RuntimeException("Type error: Cannot perform operation " + comparator + " on " + leftType + " and " + rightType);
+                throw new SemanticException("Type error: Cannot perform operation " + comparator + " on " + leftType + " and " + rightType);
             }
             leftType = "boolean";
         }
         return leftType;
     }
 
-    private String termExpr() {
-        String leftType = factorExpr();
+    private String termExpression() {
+        String leftType = factorExpression();
 
         while (peek(OPERATOR, "+") || peek(OPERATOR, "-")) {
             String operator = currentToken.getValue();
@@ -686,29 +727,29 @@ public class Parser {
             } else {
                 operationExecutor.pushOperator(operator);
             }
-            match(OPERATOR);
+            consume(OPERATOR);
 
-            String rightType = factorExpr();
+            String rightType = factorExpression();
 
             if (!leftType.equals(rightType)) {
                 if (!(operator.equals("+") && (leftType.equals("string") || rightType.equals("string")))) {
-                    throw new RuntimeException("Type error: Cannot perform operation " + operator + " on " + leftType + " and " + rightType);
+                    throw new SemanticException("Type error: Cannot perform operation " + operator + " on " + leftType + " and " + rightType);
                 }
             }
 
             if (operator.equals("+") && (leftType.equals("string") || rightType.equals("string"))) {
                 leftType = "string";
             } else if (operator.equals("+") && leftType.equals("boolean")) {
-                throw new RuntimeException("Type error: Cannot perform addition on boolean type");
+                throw new SemanticException("Type error: Cannot perform addition on boolean type");
             } else if (operator.equals("-") && leftType.equals("boolean")) {
-                throw new RuntimeException("Type error: Cannot perform subtraction on boolean type");
+                throw new SemanticException("Type error: Cannot perform subtraction on boolean type");
             }
         }
         return leftType;
     }
 
-    private String factorExpr() {
-        String leftType = unaryExpr();
+    private String factorExpression() {
+        String leftType = unaryExpression();
 
         while (peek(OPERATOR, "*") || peek(OPERATOR, "/") || peek(OPERATOR, "%")) {
             String operator = currentToken.getValue();
@@ -717,28 +758,28 @@ public class Parser {
             } else {
                 operationExecutor.pushOperator(operator);
             }
-            match(OPERATOR);
+            consume(OPERATOR);
 
-            String rightType = unaryExpr();
+            String rightType = unaryExpression();
 
             if (!leftType.equals(rightType)) {
-                throw new RuntimeException("Type error: Cannot perform operation " + operator + " on " + leftType + " and " + rightType);
+                throw new SemanticException("Type error: Cannot perform operation " + operator + " on " + leftType + " and " + rightType);
             }
 
             if (!leftType.equals("int") && !leftType.equals("float")) {
-                throw new RuntimeException("Type error: Cannot perform operation " + operator + " on " + leftType);
+                throw new SemanticException("Type error: Cannot perform operation " + operator + " on " + leftType);
             }
         }
         return leftType;
     }
 
-    private String unaryExpr() {
+    private String unaryExpression() {
         if (peek(COMPARATOR, "!")) {
-            match(COMPARATOR, "!");
-            String operandType = unaryExpr();
+            consume(COMPARATOR, "!");
+            String operandType = unaryExpression();
 
             if (!operandType.equals("boolean")) {
-                throw new RuntimeException("Type error: Cannot perform operation ! on " + operandType);
+                throw new SemanticException("Type error: Cannot perform operation ! on " + operandType);
             }
             return "boolean";
         } else {
@@ -762,29 +803,29 @@ public class Parser {
                 }
             }
 
-            return primaryExpr();
+            return primaryExpression();
         }
     }
 
-    private String primaryExpr() {
+    private String primaryExpression() {
         if (peek(INTEGER)) {
-            match(INTEGER);
+            consume(INTEGER);
             return "int";
         } else if (peek(FLOAT)) {
-            match(FLOAT);
+            consume(FLOAT);
             return "float";
         } else if (peek(STRING)) {
-            match(STRING);
+            consume(STRING);
             return "string";
         } else if (peek(KEYWORD, "true") || peek(KEYWORD, "false")) {
-            match(KEYWORD);
+            consume(KEYWORD);
             return "boolean";
         } else if (peek(KEYWORD, "null")) {
-            match(KEYWORD);
+            consume(KEYWORD);
             return "null";
         } else if (peek(IDENTIFIER)) {
             if (peekNext(PUNCTUATION, "(")) {
-                return functionCallStmt();
+                return functionCallStatement();
             }
 
             String identifier = currentToken.getValue();
@@ -795,11 +836,11 @@ public class Parser {
             }
 
             if (!symbolTable.hasSymbol(identifier)) {
-                throw new RuntimeException("Variable " + identifier + " not declared " + currentTokenIndex);
+                throw new SemanticException("Undeclared variable: Variable " + identifier + " not declared " + currentTokenIndex);
             } else if (!symbol.isInitialized()) {
-                throw new RuntimeException("Variable " + identifier + " not initialized");
+                throw new SemanticException("Unassigned variable: Variable " + identifier + " not initialized");
             } else {
-                match(IDENTIFIER);
+                consume(IDENTIFIER);
                 if (peek(PUNCTUATION, "[")) {
                     operationExecutor.setIsInsideArray(true);
                     arrayAccess(identifier);
@@ -808,9 +849,9 @@ public class Parser {
             }
             return symbol.getType();
         } else if (peek(PUNCTUATION, "(")) {
-            match(PUNCTUATION, "(");
+            consume(PUNCTUATION, "(");
             String type = expression();
-            match(PUNCTUATION, ")");
+            consume(PUNCTUATION, ")");
             return type;
         } else {
             return "void";
@@ -831,11 +872,11 @@ public class Parser {
                 value.equals(tokens.get(currentTokenIndex + 1).getValue());
     }
 
-    private void match(TokenType type) {
+    private void consume(TokenType type) throws SyntaxException {
         if (currentToken.getType() == type) {
             next();
         } else {
-            throw new RuntimeException(
+            throw new SyntaxException(
                     String.format("Syntax error: Expected type (%s) but found type (%s)\n Token: %s\n index: %d",
                             type,
                             currentToken.getType(),
@@ -846,11 +887,11 @@ public class Parser {
         }
     }
 
-    private void match(TokenType type, String value) {
+    private void consume(TokenType type, String value) {
         if (currentToken.getType() == type && (value == null || value.equals(currentToken.getValue()))) {
             next();
         } else {
-            throw new RuntimeException(
+            throw new SyntaxException(
                     String.format("Syntax error: Expected type(%s) and value(%s) but found type (%s) and value(%s)" +
                                     "\n Token: %s\n index: %d",
                             type,
@@ -863,11 +904,11 @@ public class Parser {
         }
     }
 
-    private void match(List<String> values) {
+    private void consume(List<String> values) {
         if (currentToken.getType() == TYPE && values.contains(currentToken.getValue())) {
             next();
         } else {
-            throw new RuntimeException(
+            throw new SyntaxException(
                     String.format("Syntax error: Expected type(%s) and values(%s) but found type (%s) and value(%s)" +
                                     "\n Token: %s\n index: %d",
                             TYPE,

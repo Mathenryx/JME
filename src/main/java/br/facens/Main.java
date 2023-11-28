@@ -1,6 +1,8 @@
 package br.facens;
 
 import br.facens.exceptions.LexerException;
+import br.facens.exceptions.SemanticException;
+import br.facens.exceptions.SyntaxException;
 import br.facens.lexer.Lexer;
 import br.facens.lexer.Token;
 import br.facens.parser.Parser;
@@ -14,7 +16,7 @@ public class Main {
     public static void main(String[] args) {
         try {
             System.out.println("========== Reading Files ==========");
-            List<String> lexemes = FileReader.read("src/main/resources/file2.txt");
+            List<String> lexemes = FileReader.read("src/main/resources/file.txt");
             System.out.println("Files Read Successfully\n");
 
             System.out.println("========== Lexical Analysis ==========");
@@ -25,8 +27,9 @@ public class Main {
             Parser parser = new Parser(tokens);
             parser.parse();
 
-        } catch (IOException | LexerException e) {
+        } catch (IOException | LexerException | SyntaxException |SemanticException e) {
             e.printStackTrace();
+
         }
     }
 }
