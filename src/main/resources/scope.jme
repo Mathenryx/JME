@@ -1,0 +1,9 @@
+class Main {
+    void main() {
+		int a = 2;
+		if (1) {
+			print(a);
+		}
+		
+    }
+}

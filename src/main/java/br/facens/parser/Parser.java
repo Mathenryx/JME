@@ -304,7 +304,6 @@ public class Parser {
         } else if (peek(KEYWORD, "break")) {
             consume(KEYWORD, "break");
             consume(PUNCTUATION, ";");
-
         } else {
             symbolTable.pushScope();
             block();
