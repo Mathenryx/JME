@@ -10,26 +10,43 @@ import br.facens.reader.FileReader;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Scanner;
 
 public class Main {
 
     public static void main(String[] args) {
-        try {
-            System.out.println("========== Reading Files ==========");
-            List<String> lexemes = FileReader.read("src/main/resources/file.txt");
-            System.out.println("Files Read Successfully\n");
+        Scanner scanner = new Scanner(System.in);
+        while (true) {
+            try {
+                System.out.println("\n========== Inserting File ==========");
+                System.out.print("Insert file name (or 'exit' to close): ");
+                String fileName = scanner.nextLine();
 
-            System.out.println("========== Lexical Analysis ==========");
-            List<Token> tokens = Lexer.analyze(lexemes);
-            System.out.println("Files Tokenizes Successfully\n");
+                if (fileName.equalsIgnoreCase("exit")) {
+                    System.out.println("Closing program...");
+                    break;
+                } else if (!fileName.endsWith(".jme")) {
+                    System.out.println("File extension must be .jme");
+                } else {
+                    System.out.println("\n========== Reading Files ==========");
+                    List<String> lexemes = FileReader.read("src/main/resources/" + fileName);
+                    System.out.println("Files Read Successfully");
 
-            System.out.println("========== Parser ==========");
-            Parser parser = new Parser(tokens);
-            parser.parse();
+                    System.out.println("\n========== Lexical Analysis ==========");
+                    List<Token> tokens = Lexer.analyze(lexemes);
+                    System.out.println("Files Tokenizes Successfully");
 
-        } catch (IOException | LexerException | SyntaxException |SemanticException e) {
-            e.printStackTrace();
+                    System.out.println("\n========== Parser ==========");
+                    Parser parser = new Parser(tokens);
+                    parser.parse();
+                    System.out.println("Parser Completed Successfully!\n");
+                }
 
+
+            } catch (IOException | LexerException | SyntaxException | SemanticException e) {
+                e.printStackTrace();
+            }
         }
+        scanner.close();
     }
 }

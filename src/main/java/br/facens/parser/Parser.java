@@ -46,7 +46,6 @@ public class Parser {
         symbolTable.pushScope();
         collectFunctionDeclarations();
         program();
-        System.out.println("\nParser Completed Successfully!");
     }
 
     private void program() {
