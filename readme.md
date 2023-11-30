@@ -22,7 +22,7 @@
 ### Maven
 #### Download e Descompactação do Maven:
 1. Acesse o site oficial do Apache Maven: Download do Maven.
-2. Baixe a versão mais recente do Maven (arquivo zip).
+2. Baixe a versão mais recente do Maven (Binary zip archive).
 3. Descompacte o arquivo zip em um diretório de sua escolha (por exemplo, C:\Program Files\Apache\maven).
 
 #### Configuração das Variáveis de Ambiente para o Maven:
